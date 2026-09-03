@@ -151,6 +151,41 @@ def test_urgent_travel_mentions_whatsapp(chat_service: ChatService) -> None:
     assert "last-minute" in response.answer.lower() or "real-time" in response.answer.lower()
 
 
+def test_hotel_request_does_not_start_vip_enquiry(chat_service: ChatService) -> None:
+    chat_service._gemini_client.generate.return_value = "Yes, I can book a hotel for you now."
+    with patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=False):
+        response = chat_service.chat("Please book a hotel in London")
+    state = chat_service.conversation_store.get_enquiry_state(response.conversation_id)
+    assert state.enquiry_type.value == "none" or state.enquiry_type.name == "NONE"
+    lowered = response.answer.lower()
+    assert "avip@upgradevip.com" in lowered
+    assert "airport vip" in lowered or "airport transfers" in lowered
+    assert "i can book a hotel for you now" not in lowered
+
+
+def test_gatwick_false_coverage_is_corrected(chat_service: ChatService) -> None:
+    chat_service._gemini_client.generate.return_value = (
+        "Yes, we operate at Gatwick and will meet you at Terminal South."
+    )
+    with patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=False):
+        response = chat_service.chat("Do you operate at London Gatwick?")
+    lowered = response.answer.lower()
+    assert "350+" in lowered
+    assert "specifically confirm" in lowered
+    assert "yes, we operate at gatwick" not in lowered
+
+
+def test_pricing_question_gets_contact_not_invented_price(chat_service: ChatService) -> None:
+    chat_service._gemini_client.generate.return_value = "VIP is £320 and we offer 10% discount."
+    with patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=False):
+        response = chat_service.chat("How much does it cost and do you offer a discount?")
+    lowered = response.answer.lower()
+    assert "£320" not in response.answer
+    assert "10%" not in response.answer
+    assert "avip@upgradevip.com" in lowered
+    assert "not available" in lowered
+
+
 def service_next_is_not_airport(chat_service: ChatService, state) -> bool:
     missing = chat_service.booking_service.next_missing_field(state)
     return missing is not None and missing[0] != "airport"

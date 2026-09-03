@@ -10,6 +10,7 @@ from app.prompts.system_prompt import RAG_USER_PROMPT_TEMPLATE, SYSTEM_PROMPT
 from app.services.gemini_client import GeminiClient, get_gemini_client
 from app.services.booking_service import BookingService
 from app.services.conversation_store import ConversationStore, get_conversation_store
+from app.services.grounding import GroundingService
 from app.services.rag_service import RagService
 from app.services.retrieval_service import RetrievalService
 
@@ -45,6 +46,7 @@ class ChatService:
         rag_service: RagService | None = None,
         retrieval_service: RetrievalService | None = None,
         booking_service: BookingService | None = None,
+        grounding_service: GroundingService | None = None,
         ai_client: GeminiClient | None = None,
     ) -> None:
         self.settings = settings or get_settings()
@@ -52,6 +54,7 @@ class ChatService:
         self.rag_service = rag_service or RagService()
         self.retrieval_service = retrieval_service or RetrievalService()
         self.booking_service = booking_service or BookingService()
+        self.grounding_service = grounding_service or GroundingService()
         self._gemini_client = ai_client
 
     @property
@@ -65,6 +68,10 @@ class ChatService:
         enquiry_state = record.enquiry_state
 
         detected_intent = self.booking_service.detect_intent(message)
+        contact_only = self.grounding_service.detect_contact_only_service(message)
+        # Do not start a VIP/transfer enquiry when the user asked for a contact-only service.
+        if contact_only:
+            detected_intent = EnquiryType.NONE
         if detected_intent != EnquiryType.NONE and enquiry_state.enquiry_type == EnquiryType.NONE:
             enquiry_state = self.booking_service.start_enquiry(enquiry_state, detected_intent)
 
@@ -82,6 +89,7 @@ class ChatService:
             self.conversation_store.set_enquiry_state(conversation_id, enquiry_state)
 
         retrieval_query = self._build_retrieval_query(message, record.messages)
+        retrieval_query = self.grounding_service.boost_retrieval_query(retrieval_query)
         use_rag = self.retrieval_service.needs_retrieval(
             message,
             enquiry_active=enquiry_state.enquiry_type != EnquiryType.NONE,
@@ -95,6 +103,9 @@ class ChatService:
 
         enquiry_context = self.booking_service.build_enquiry_context(enquiry_state)
         history = self._format_history(record.messages)
+        grounding_directives = self.grounding_service.build_grounding_directives(message)
+        if grounding_directives:
+            enquiry_context = f"{grounding_directives}\n\n{enquiry_context}".strip()
         is_urgent = self.booking_service.detect_urgent_travel(message)
         if is_urgent:
             urgent_note = (
@@ -145,6 +156,9 @@ class ChatService:
         if enquiry_state.status == EnquiryStatus.COMPLETE:
             # One clean handover: structured summary only (no stacked closings).
             answer = self.booking_service.unified_handover_message(enquiry_state)
+        else:
+            # Enforce KB grounding for high-risk factual / capability questions.
+            answer = self.grounding_service.ensure_answer_covers_grounding(message, answer)
 
         answer = self.booking_service.strip_redundant_closings(answer)
         answer = strip_code_from_reply(answer)
@@ -176,7 +190,7 @@ class ChatService:
         return self.gemini_client.generate(
             system_prompt=SYSTEM_PROMPT,
             user_prompt=user_prompt,
-            temperature=0.4,
+            temperature=0.2,
         )
 
     def _build_retrieval_query(
