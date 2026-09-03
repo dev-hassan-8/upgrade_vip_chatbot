@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import chromadb
-
 from app.config import Settings, get_settings
 from app.vectorstore.base import RetrievedChunk, VectorDocument, VectorStore
 
 
 class ChromaVectorStore(VectorStore):
     def __init__(self, settings: Settings | None = None) -> None:
+        import chromadb
+
         self.settings = settings or get_settings()
         self.persist_dir = self.settings.chroma_path
         self.persist_dir.mkdir(parents=True, exist_ok=True)

@@ -8,8 +8,8 @@ from app.ingestion.chunker import TextChunk, chunk_document, stable_chunk_id
 from app.ingestion.loader import discover_documents, load_document
 from app.services.embedding_service import EmbeddingService
 from app.services.gemini_errors import GeminiEmbeddingError
-from app.vectorstore.base import VectorDocument
-from app.vectorstore.chroma_store import ChromaVectorStore
+from app.vectorstore.base import VectorDocument, VectorStore
+from app.vectorstore.factory import get_vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +18,11 @@ class DocumentProcessor:
     def __init__(
         self,
         settings: Settings | None = None,
-        vector_store: ChromaVectorStore | None = None,
+        vector_store: VectorStore | None = None,
         embedding_service: EmbeddingService | None = None,
     ) -> None:
         self.settings = settings or get_settings()
-        self.vector_store = vector_store or ChromaVectorStore(self.settings)
+        self.vector_store = vector_store or get_vector_store(self.settings)
         self.embedding_service = embedding_service or EmbeddingService(self.settings)
 
     def ingest_directory(

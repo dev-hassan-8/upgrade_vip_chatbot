@@ -6,8 +6,8 @@ import re
 from app.config import Settings, get_settings
 from app.models.chat import Source
 from app.services.embedding_service import EmbeddingService
-from app.vectorstore.base import RetrievedChunk
-from app.vectorstore.chroma_store import ChromaVectorStore
+from app.vectorstore.base import RetrievedChunk, VectorStore
+from app.vectorstore.factory import get_vector_store
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +24,11 @@ class RetrievalService:
     def __init__(
         self,
         settings: Settings | None = None,
-        vector_store: ChromaVectorStore | None = None,
+        vector_store: VectorStore | None = None,
         embedding_service: EmbeddingService | None = None,
     ) -> None:
         self.settings = settings or get_settings()
-        self.vector_store = vector_store or ChromaVectorStore(self.settings)
+        self.vector_store = vector_store or get_vector_store(self.settings)
         self.embedding_service = embedding_service or EmbeddingService(self.settings)
 
     def needs_retrieval(self, message: str, enquiry_active: bool = False) -> bool:

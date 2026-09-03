@@ -1,3 +1,4 @@
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -24,6 +25,7 @@ class Settings(BaseSettings):
 
     chroma_persist_directory: str = "./chroma_db"
     chroma_collection_name: str = "upgradevip_gemini"
+    vector_store_backend: str = "auto"
 
     knowledge_base_dir: str = "./knowledge_base"
     chunk_size: int = 800
@@ -45,6 +47,15 @@ class Settings(BaseSettings):
     @property
     def chroma_path(self) -> Path:
         return self.project_root / self.chroma_persist_directory
+
+    @property
+    def use_memory_vector_store(self) -> bool:
+        backend = (self.vector_store_backend or "auto").strip().lower()
+        if backend == "memory":
+            return True
+        if backend == "chroma":
+            return False
+        return bool(os.environ.get("VERCEL"))
 
 
 @lru_cache
