@@ -12,7 +12,7 @@ from app.services.booking_service import BookingService
 from app.services.conversation_store import ConversationStore, get_conversation_store
 from app.services.grounding import GroundingService
 from app.services.rag_service import RagService
-from app.services.retrieval_service import RetrievalService
+from app.services.retrieval_service import RetrievalService, UNAVAILABLE_ANSWER
 
 logger = logging.getLogger(__name__)
 
@@ -97,9 +97,10 @@ class ChatService:
 
         context = ""
         sources: list[Source] = []
+        relevant_chunks: list = []
         if use_rag:
-            context, chunks = self.rag_service.retrieve_context(retrieval_query)
-            sources = self.retrieval_service.to_sources(chunks)
+            context, relevant_chunks = self.rag_service.retrieve_context(retrieval_query)
+            sources = self.retrieval_service.to_sources(relevant_chunks)
 
         enquiry_context = self.booking_service.build_enquiry_context(enquiry_state)
         history = self._format_history(record.messages)
@@ -114,6 +115,33 @@ class ChatService:
                 "confirmation. Do not treat this as a normal wait-for-email enquiry."
             )
             enquiry_context = f"{urgent_note}\n\n{enquiry_context}".strip()
+
+        # No sufficiently relevant KB context → do not invent from weak/cross-topic matches.
+        if use_rag and not relevant_chunks and not contact_only:
+            # Still allow grounding post-checks for pricing / coverage style questions
+            # that have deterministic fallbacks, via a short unavailable stub.
+            answer = UNAVAILABLE_ANSWER
+            if self.grounding_service.asks_about_pricing(message) or self.grounding_service.find_unconfirmed_airports(message) or self.grounding_service.asks_about_terminal(message):
+                answer = self.grounding_service.ensure_answer_covers_grounding(message, answer)
+            elif is_urgent:
+                answer = f"{self.booking_service.urgent_contact_message()}\n\n{answer}"
+            else:
+                answer = self.grounding_service.ensure_answer_covers_grounding(message, answer)
+
+            if self.booking_service.is_informational_question(message) and enquiry_state.status != EnquiryStatus.COMPLETE:
+                closing = self.booking_service.informational_closing()
+                if closing.lower() not in answer.lower():
+                    answer = f"{answer.rstrip()}\n\n{closing}"
+
+            answer = self.booking_service.strip_redundant_closings(answer)
+            answer = strip_code_from_reply(answer)
+            self.conversation_store.append_message(conversation_id, "user", message)
+            self.conversation_store.append_message(conversation_id, "assistant", answer)
+            return ChatResponse(
+                answer=answer,
+                conversation_id=conversation_id,
+                sources=sources,
+            )
 
         answer = self._generate_response(
             message=message,

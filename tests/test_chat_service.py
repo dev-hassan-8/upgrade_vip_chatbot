@@ -186,6 +186,17 @@ def test_pricing_question_gets_contact_not_invented_price(chat_service: ChatServ
     assert "not available" in lowered
 
 
+def test_empty_relevant_retrieval_uses_unavailable_fallback(chat_service: ChatService) -> None:
+    with patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=True), patch.object(
+        chat_service.rag_service,
+        "retrieve_context",
+        return_value=("", []),
+    ):
+        response = chat_service.chat("Do you provide underwater submarine escorts?")
+    assert "don't have specific information about that in my current details" in response.answer.lower()
+    chat_service._gemini_client.generate.assert_not_called()
+
+
 def service_next_is_not_airport(chat_service: ChatService, state) -> bool:
     missing = chat_service.booking_service.next_missing_field(state)
     return missing is not None and missing[0] != "airport"

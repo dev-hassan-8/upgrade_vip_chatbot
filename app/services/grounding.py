@@ -107,7 +107,28 @@ class GroundingService:
 
     def asks_about_guarantee(self, message: str) -> bool:
         text = message.lower()
-        return "guarantee" in text or "travel delight" in text
+        if "travel delight" in text or "delight guarantee" in text:
+            return True
+        if "guarantee" not in text:
+            return False
+        # "Can you guarantee wheelchair/fast-track..." is operational, not Travel Delight.
+        operational = (
+            "wheelchair",
+            "prm",
+            "assistance",
+            "fast track",
+            "fast-track",
+            "security",
+            "every airport",
+            "at every",
+            "terminal",
+            "arrival",
+            "transfer",
+            "pickup",
+        )
+        if any(token in text for token in operational):
+            return False
+        return True
 
     def asks_about_concierge_employment(self, message: str) -> bool:
         text = message.lower()

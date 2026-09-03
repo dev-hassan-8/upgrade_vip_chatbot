@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     chunk_size: int = 800
     chunk_overlap: int = 100
     top_k: int = 5
-    similarity_threshold: float = 0.35
+    similarity_threshold: float = 0.45
 
     max_history_messages: int = 12
     log_level: str = "INFO"

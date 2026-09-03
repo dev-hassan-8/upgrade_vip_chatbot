@@ -103,16 +103,26 @@ def _extract_reference_url(section_body: str) -> str:
 
 def _infer_service_category(section_title: str) -> str:
     title = section_title.lower()
-    if "airport vip" in title or "meet & greet" in title:
+    if "bot capabilities" in title or "booking information" in title:
+        return "booking_capabilities"
+    if "global availability" in title or "featured airports" in title:
+        return "airport_coverage"
+    if "travel delight" in title or "terms & conditions" in title or "terms and conditions" in title:
+        return "travel_delight_guarantee"
+    if "mission" in title and "guarantee" in title:
+        return "mission_guarantee"
+    if "airport vip" in title or "meet & greet" in title or "who uses" in title:
         return "airport_vip"
     if "transfer" in title or "chauffeur" in title or "transportation" in title:
         return "airport_transfer"
-    if "contact" in title:
+    if "contact" in title or "reach us" in title:
         return "contact"
-    if "legal" in title or "privacy" in title or "terms" in title:
+    if "privacy" in title or "gdpr" in title or "copyright" in title:
         return "legal"
     if "service" in title:
         return "services"
+    if "about upgradevip" in title or "brand" in title or "partnership" in title:
+        return "company"
     return "general"
 
 
