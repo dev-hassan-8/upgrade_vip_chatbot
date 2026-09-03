@@ -152,6 +152,56 @@ class GroundingService:
         )
         return any(marker in text for marker in markers)
 
+    def asks_about_lounge_inclusions(self, message: str) -> bool:
+        """Food/drink/amenity questions about VIP lounges (not lounge ownership)."""
+        text = message.lower()
+        if self.asks_about_partnerships_or_ownership(message):
+            return False
+
+        inclusion_markers = (
+            "meal",
+            "meals",
+            "food",
+            "drink",
+            "drinks",
+            "beverage",
+            "beverages",
+            "refreshment",
+            "refreshments",
+            "complimentary",
+            "amenities",
+            "amenity",
+            "included",
+            "inclusion",
+            "inclusions",
+            "what is included",
+            "what's included",
+            "free meal",
+            "free food",
+            "free drink",
+            "eat",
+            "eating",
+        )
+        lounge_context = any(
+            token in text
+            for token in ("lounge", "lounges", "vip lounge", "airport vip lounge")
+        )
+        if not any(marker in text for marker in inclusion_markers):
+            return False
+        # Lounge mentioned, or VIP + free/complimentary food/drink wording
+        if lounge_context:
+            return True
+        return "vip" in text and any(
+            token in text
+            for token in ("meal", "meals", "food", "drink", "drinks", "refreshment", "complimentary")
+        )
+
+    def lounge_inclusions_fallback(self) -> str:
+        return (
+            "I can confirm that our Airport VIP Lounge service provides access to luxury lounges, "
+            "but I don’t have specific information confirming whether meals or drinks are complimentary."
+        )
+
     def find_unconfirmed_airports(self, message: str) -> list[str]:
         text = message.lower()
         found: list[str] = []
@@ -192,6 +242,14 @@ class GroundingService:
             extras.extend(["20,000 concierges", "trusted local operators", "licensed insured"])
         if self.asks_about_partnerships_or_ownership(message):
             extras.extend(["partnerships", "local operators", "lounge services", "experience"])
+        if self.asks_about_lounge_inclusions(message):
+            extras.extend(
+                [
+                    "Airport VIP Lounge Services",
+                    "lounge access",
+                    "luxury lounges",
+                ]
+            )
         if self.find_unconfirmed_airports(message) or self.asks_about_terminal(message):
             extras.extend(["350+ airports worldwide", "global availability", "featured airports"])
         if not extras:
@@ -265,6 +323,15 @@ class GroundingService:
                 "- Partnerships/ownership: do not invent airline, lounge ownership, airport-authority, "
                 "or named supplier arrangements. Only use what the KB states (e.g. Fortune 500 / FTSE 100 "
                 "/ TMC / luxury travel categories; licensed local operators; lounge access as a service)."
+            )
+
+        if self.asks_about_lounge_inclusions(message):
+            lines.append(
+                "- Lounge inclusions: you may confirm access to luxury lounges only. Do NOT confirm "
+                "free meals, complimentary drinks, food/beverage inclusions, refreshments, or other "
+                "specific lounge amenities unless explicitly stated. If asked about free/complimentary "
+                "meals or drinks, say current information only confirms lounge access and does not "
+                "specify whether meals or drinks are complimentary."
             )
 
         return "\n".join(lines)
@@ -342,6 +409,66 @@ class GroundingService:
                     parts = [pricing]
                 else:
                     parts.append(pricing)
+
+        if self.asks_about_lounge_inclusions(message):
+            joined = " ".join(parts).lower()
+            invents_complimentary = any(
+                phrase in joined
+                for phrase in (
+                    "complimentary",
+                    "free meal",
+                    "free meals",
+                    "free food",
+                    "free drink",
+                    "free drinks",
+                    "meals are free",
+                    "drinks are free",
+                    "food is free",
+                    "included free",
+                    "free of charge",
+                )
+            )
+            invents_amenities = any(
+                phrase in joined
+                for phrase in (
+                    "champagne",
+                    "buffet",
+                    "bar service",
+                    "unlimited drinks",
+                    "hot meals",
+                    "à la carte",
+                    "a la carte",
+                    "snacks are included",
+                    "food is included",
+                    "drinks are included",
+                    "meals are included",
+                    "refreshments are included",
+                    "offering food",
+                    "includes food",
+                    "include food",
+                    "includes drinks",
+                    "include drinks",
+                )
+            )
+            properly_hedged = (
+                "lounge" in joined
+                and any(
+                    phrase in joined
+                    for phrase in (
+                        "does not specify",
+                        "don't have specific",
+                        "do not have specific",
+                        "doesn’t have specific",
+                        "not specifically confirm",
+                        "does not specifically confirm",
+                        "no specific information",
+                        "don't have specific information confirming",
+                    )
+                )
+            )
+            if invents_complimentary or invents_amenities or not properly_hedged:
+                parts = [self.lounge_inclusions_fallback()]
+
         unconfirmed = self.find_unconfirmed_airports(message)
         if unconfirmed:
             joined = " ".join(parts).lower()

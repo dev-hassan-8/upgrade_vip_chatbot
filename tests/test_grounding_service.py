@@ -139,3 +139,29 @@ def test_guarantee_extra_conditions_rewritten() -> None:
     assert "in-house concierge" in lowered
     assert "service fee" in lowered
     assert "third-party suppliers guarantee" not in lowered
+
+
+def test_lounge_free_meals_not_confirmed() -> None:
+    service = GroundingService()
+    assert service.asks_about_lounge_inclusions(
+        "Are meals and drinks free in the Airport VIP Lounge?"
+    )
+    answer = service.ensure_answer_covers_grounding(
+        "Are meals and complimentary drinks included in the VIP lounge?",
+        "Yes, lounges include free meals, complimentary drinks, and a full buffet.",
+    )
+    lowered = answer.lower()
+    assert "access to luxury lounges" in lowered
+    assert "complimentary" in lowered and "confirming whether" in lowered
+    assert "buffet" not in lowered
+    assert "free meals" not in lowered
+
+
+def test_lounge_food_question_uses_safe_hedge() -> None:
+    service = GroundingService()
+    answer = service.ensure_answer_covers_grounding(
+        "Does the lounge include food and refreshments?",
+        "Yes, food and refreshments are included in every lounge.",
+    )
+    assert "access to luxury lounges" in answer.lower()
+    assert "meals or drinks are complimentary" in answer.lower()
