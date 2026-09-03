@@ -3,10 +3,6 @@ from __future__ import annotations
 import logging
 import time
 
-from google import genai
-from google.genai import types
-from google.genai.errors import APIError
-
 from app.config import Settings, get_settings
 from app.services.gemini_errors import (
     GeminiEmbeddingError,
@@ -21,9 +17,14 @@ class GeminiClient:
         self.settings = settings or get_settings()
         if not self.settings.gemini_api_key:
             raise RuntimeError("GEMINI_API_KEY is not configured.")
+        from google import genai
+
         self._client = genai.Client(api_key=self.settings.gemini_api_key)
 
     def generate(self, system_prompt: str, user_prompt: str, temperature: float) -> str:
+        from google.genai import types
+        from google.genai.errors import APIError
+
         models = [
             self.settings.gemini_chat_model,
             self.settings.gemini_fallback_chat_model,
@@ -109,6 +110,8 @@ class GeminiClient:
         batch_number: int,
         max_retries: int,
     ) -> list[list[float]]:
+        from google.genai.errors import APIError
+
         last_error: GeminiEmbeddingError | None = None
 
         for attempt in range(1, max_retries + 1):

@@ -2,8 +2,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from app.models.chat import ChatRequest, ChatResponse, ConversationHistoryResponse, ConversationMessage
-from app.services.chat_service import ChatService
+from app.models.chat import ChatRequest, ChatResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -16,6 +15,8 @@ def chat(request: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
     try:
+        from app.services.chat_service import ChatService
+
         service = ChatService()
         return service.chat(message=message, conversation_id=request.conversation_id)
     except RuntimeError as exc:

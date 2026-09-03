@@ -1,19 +1,15 @@
 import logging
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes_chat import router as chat_router
-from app.api.routes_conversations import router as conversations_router
-from app.api.routes_documents import router as documents_router
 from app.api.routes_health import router as health_router
 from app.config import get_settings
 
 settings = get_settings()
-logging.basicConfig(level=settings.log_level)
+logging.basicConfig(level=getattr(logging, str(settings.log_level).upper(), logging.INFO))
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
@@ -31,14 +27,28 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
-app.include_router(chat_router)
-app.include_router(documents_router)
-app.include_router(conversations_router)
+
+
+def _include_router(label: str, import_name: str) -> None:
+    try:
+        module = __import__(import_name, fromlist=["router"])
+        app.include_router(module.router)
+    except Exception:
+        logger.exception("Failed to load %s routes", label)
+
+
+_include_router("chat", "app.api.routes_chat")
+_include_router("documents", "app.api.routes_documents")
+_include_router("conversations", "app.api.routes_conversations")
 
 frontend_dir = settings.project_root / "frontend"
 if frontend_dir.exists():
     app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
 
-    @app.get("/")
-    def serve_frontend() -> FileResponse:
-        return FileResponse(frontend_dir / "index.html")
+
+@app.get("/", response_model=None)
+def serve_frontend():
+    index_path = frontend_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return HTMLResponse("<h1>UpgradeVIP Chatbot</h1><p>Frontend files were not bundled.</p>")

@@ -5,9 +5,6 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from pypdf import PdfReader
-from docx import Document
-
 logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".txt", ".pdf", ".docx"}
@@ -60,6 +57,8 @@ def _load_txt(path: Path) -> LoadedDocument:
 
 
 def _load_pdf(path: Path) -> LoadedDocument:
+    from pypdf import PdfReader
+
     reader = PdfReader(str(path))
     pages: list[str] = []
     for index, page in enumerate(reader.pages, start=1):
@@ -77,6 +76,8 @@ def _load_pdf(path: Path) -> LoadedDocument:
 
 
 def _load_docx(path: Path) -> LoadedDocument:
+    from docx import Document
+
     document = Document(str(path))
     paragraphs = [paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()]
     text = clean_text("\n\n".join(paragraphs))

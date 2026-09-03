@@ -3,9 +3,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from app.config import get_settings
-from app.ingestion.loader import SUPPORTED_EXTENSIONS
-from app.ingestion.processor import DocumentProcessor
+SUPPORTED_EXTENSIONS = {".txt", ".pdf", ".docx"}
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -28,6 +26,8 @@ async def upload_document(file: UploadFile = File(...)) -> dict[str, int | str]:
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
     try:
+        from app.ingestion.processor import DocumentProcessor
+
         processor = DocumentProcessor()
         chunk_count = processor.ingest_upload(file.filename, content)
         return {"filename": file.filename, "chunks_ingested": chunk_count}

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UpgradeVIP Assistant</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div>
+        <h1>UpgradeVIP Assistant</h1>
+        <p>Airport VIP services and transfers</p>
+      </div>
+    </header>
+
+    <main id="chat" class="chat" aria-live="polite"></main>
+
+    <form id="chat-form" class="composer">
+      <input
+        id="message-input"
+        type="text"
+        placeholder="Ask about UpgradeVIP services..."
+        autocomplete="off"
+        required
+      />
+      <button id="send-button" type="submit">Send</button>
+    </form>
+
+    <p id="error" class="error" hidden></p>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

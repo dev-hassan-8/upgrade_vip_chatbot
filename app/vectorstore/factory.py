@@ -10,6 +10,9 @@ def get_vector_store(settings: Settings | None = None) -> VectorStore:
     if settings.use_memory_vector_store:
         return KnowledgeMemoryStore(settings)
 
-    from app.vectorstore.chroma_store import ChromaVectorStore
+    try:
+        from app.vectorstore.chroma_store import ChromaVectorStore
 
-    return ChromaVectorStore(settings)
+        return ChromaVectorStore(settings)
+    except Exception:
+        return KnowledgeMemoryStore(settings)

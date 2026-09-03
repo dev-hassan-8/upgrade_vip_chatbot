@@ -1,0 +1,137 @@
+:root {
+  color-scheme: light;
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --brand: #0f4c81;
+  --brand-dark: #0b3a61;
+  --border: #e5e7eb;
+  --user: #e8f1fb;
+  --assistant: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  max-width: 860px;
+  margin: 0 auto;
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  padding: 16px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.header {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 24px;
+}
+
+.header h1 {
+  margin: 0 0 4px;
+  font-size: 1.5rem;
+}
+
+.header p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.chat {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  scroll-behavior: smooth;
+}
+
+.message {
+  max-width: 85%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.message.user {
+  align-self: flex-end;
+  background: var(--user);
+}
+
+.message.assistant {
+  align-self: flex-start;
+  background: var(--assistant);
+  border: 1px solid var(--border);
+}
+
+.message.loading {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.composer input {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 1rem;
+}
+
+.composer button {
+  border: none;
+  border-radius: 12px;
+  padding: 0 20px;
+  background: var(--brand);
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.composer button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.composer button:hover:not(:disabled) {
+  background: var(--brand-dark);
+}
+
+.error {
+  margin: 0;
+  color: #b91c1c;
+}
+
+@media (max-width: 640px) {
+  .app {
+    padding: 10px;
+  }
+
+  .message {
+    max-width: 100%;
+  }
+}
