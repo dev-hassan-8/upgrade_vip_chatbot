@@ -17,7 +17,7 @@ def test_progressive_field_collection() -> None:
     state = EnquiryState()
     state = service.start_enquiry(state, EnquiryType.AIRPORT_TRANSFER)
     state = service.update_from_message(state, "Heathrow")
-    assert state.airport_transfer.airport == "Heathrow"
+    assert state.airport_transfer.airport == "Heathrow (LHR)"
 
     missing = service.next_missing_field(state)
     assert missing is not None
@@ -32,7 +32,7 @@ def test_extracts_airport_from_intent_message() -> None:
         state,
         "I need airport VIP service at Heathrow Airport (LHR) for 2 passengers next Monday at 3 PM",
     )
-    assert state.airport_vip.airport == "Heathrow"
+    assert state.airport_vip.airport == "Heathrow (LHR)"
     assert state.airport_vip.passenger_count == 2
     assert state.airport_vip.service_date is not None
     assert "monday" in state.airport_vip.service_date.lower()
@@ -47,23 +47,55 @@ def test_does_not_reask_airport_when_already_known() -> None:
     state = EnquiryState()
     state = service.start_enquiry(state, EnquiryType.AIRPORT_VIP)
     state = service.update_from_message(state, "VIP meet and greet at Heathrow")
-    assert state.airport_vip.airport == "Heathrow"
+    assert state.airport_vip.airport == "Heathrow (LHR)"
     assert service.next_missing_field(state)[0] != "airport"
+
+
+def test_rejects_relational_name_fragments() -> None:
+    service = BookingService()
+    state = EnquiryState()
+    state = service.start_enquiry(state, EnquiryType.AIRPORT_VIP)
+    state = service.update_from_message(state, "traveling with my wife")
+    assert state.airport_vip.passenger_name is None
+    state = service.update_from_message(state, "My name is Ali Khan")
+    assert state.airport_vip.passenger_name == "Ali Khan"
+
+
+def test_rejects_garbage_airport_placeholders() -> None:
+    service = BookingService()
+    assert service._extract_airport("sp") is None
+    assert service._extract_airport("at sp") is None
+    assert service._extract_airport("DXB") == "Dubai (DXB)"
 
 
 def test_summary_message_is_human_readable() -> None:
     service = BookingService()
     state = EnquiryState()
     state = service.start_enquiry(state, EnquiryType.AIRPORT_VIP)
-    state.airport_vip.airport = "Lahore"
+    state.airport_vip.airport = "Lahore (LHE)"
     state.airport_vip.passenger_count = 4
     state.airport_vip.contact_email = "freh@gmail.com"
     summary = service.summary_message(state)
     assert "{'" not in summary
     assert "Summary:" not in summary
-    assert "- Airport: Lahore" in summary
+    assert "- Airport: Lahore (LHE)" in summary
     assert "- Passengers: 4" in summary
     assert "- Email: freh@gmail.com" in summary
+
+
+def test_strip_redundant_closings_keeps_one() -> None:
+    service = BookingService()
+    closing = service.informational_closing()
+    doubled = f"Here are the car types.\n\n{closing}\n\n{closing}"
+    cleaned = service.strip_redundant_closings(doubled)
+    assert cleaned.lower().count(closing.lower()) == 1
+    with_summary = (
+        "Thank you.\n\n- Airport: Heathrow (LHR)\n- Email: a@b.com\n\n"
+        f"{closing}"
+    )
+    cleaned_summary = service.strip_redundant_closings(with_summary)
+    assert closing.lower() not in cleaned_summary.lower()
+    assert "- Airport: Heathrow (LHR)" in cleaned_summary
 
 
 def test_has_team_contact_requires_name_and_email_or_phone() -> None:

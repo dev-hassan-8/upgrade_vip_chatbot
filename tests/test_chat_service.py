@@ -63,6 +63,38 @@ def test_handover_without_contact_asks_for_details(chat_service: ChatService) ->
     assert "email" in lowered
 
 
+def test_false_handover_claim_does_not_spam_contact_cta(chat_service: ChatService) -> None:
+    chat_service._gemini_client.generate.return_value = (
+        "Heathrow is supported. Our team will be in touch shortly with options."
+    )
+    with patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=False):
+        first = chat_service.chat("I need airport VIP service at Heathrow")
+        chat_service._gemini_client.generate.return_value = (
+            "Thanks — what date will you travel? Our team will review and be in touch."
+        )
+        response = chat_service.chat(
+            "What date options do I have?",
+            conversation_id=first.conversation_id,
+        )
+    lowered = response.answer.lower()
+    assert "before i send this over to our team" not in lowered
+    assert "successfully passed" not in lowered
+    assert "will be in touch" not in lowered
+
+
+def test_contact_repeat_complaint_gets_apology(chat_service: ChatService) -> None:
+    chat_service._gemini_client.generate.return_value = "Please share your name."
+    with patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=False):
+        first = chat_service.chat("I need airport VIP service at Heathrow")
+        response = chat_service.chat(
+            "so why you ask me name again and agin",
+            conversation_id=first.conversation_id,
+        )
+    lowered = response.answer.lower()
+    assert "sorry" in lowered or "apologies" in lowered
+    assert "before i send this over to our team" not in lowered
+
+
 def test_retains_heathrow_from_first_message(chat_service: ChatService) -> None:
     chat_service._gemini_client.generate.return_value = "Thanks — what date will you travel?"
     with patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=False):
@@ -71,9 +103,32 @@ def test_retains_heathrow_from_first_message(chat_service: ChatService) -> None:
         )
     store = chat_service.conversation_store
     state = store.get_enquiry_state(response.conversation_id)
-    assert state.airport_vip.airport == "Heathrow"
+    assert state.airport_vip.airport == "Heathrow (LHR)"
     assert state.airport_vip.passenger_count == 2
     assert service_next_is_not_airport(chat_service, state)
+
+
+def test_complete_enquiry_uses_unified_handover(chat_service: ChatService) -> None:
+    chat_service._gemini_client.generate.return_value = (
+        "Great, all set. Does this help, or do you have any other questions about your upcoming trip?"
+    )
+    with patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=False):
+        first = chat_service.chat("I need airport VIP at Heathrow")
+        cid = first.conversation_id
+        for message in (
+            "12 June 2026",
+            "10:00 am",
+            "2",
+            "Ali Khan",
+            "ali@example.com",
+            "+447414246103",
+        ):
+            response = chat_service.chat(message, conversation_id=cid)
+    lowered = response.answer.lower()
+    assert "heathrow (lhr)" in lowered
+    assert "ali khan" in lowered
+    assert lowered.count("does this help") == 0
+    assert "- airport:" in lowered
 
 
 def test_informational_answer_gets_helpful_closing(chat_service: ChatService) -> None:

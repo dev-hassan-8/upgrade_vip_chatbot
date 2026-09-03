@@ -12,43 +12,95 @@ from app.models.booking import (
 )
 
 AIRPORT_ALIASES: dict[str, str] = {
-    "heathrow": "Heathrow",
-    "lhr": "Heathrow",
-    "gatwick": "Gatwick",
-    "lgw": "Gatwick",
-    "stansted": "Stansted",
-    "stn": "Stansted",
-    "luton": "Luton",
-    "ltn": "Luton",
-    "city airport": "London City",
-    "london city": "London City",
-    "lcy": "London City",
-    "manchester": "Manchester",
-    "man": "Manchester",
-    "birmingham": "Birmingham",
-    "bhx": "Birmingham",
-    "edinburgh": "Edinburgh",
-    "edi": "Edinburgh",
-    "glasgow": "Glasgow",
-    "gla": "Glasgow",
-    "dublin": "Dublin",
-    "dub": "Dublin",
-    "charles de gaulle": "Paris Charles de Gaulle",
-    "cdg": "Paris Charles de Gaulle",
-    "orly": "Paris Orly",
-    "ory": "Paris Orly",
-    "schiphol": "Amsterdam Schiphol",
-    "ams": "Amsterdam Schiphol",
-    "dubai": "Dubai",
-    "dxb": "Dubai",
-    "lahore": "Lahore",
-    "lhe": "Lahore",
-    "islamabad": "Islamabad",
-    "isb": "Islamabad",
-    "karachi": "Karachi",
-    "khi": "Karachi",
-    "jfk": "New York JFK",
-    "lax": "Los Angeles",
+    "heathrow": "Heathrow (LHR)",
+    "london heathrow": "Heathrow (LHR)",
+    "lhr": "Heathrow (LHR)",
+    "gatwick": "Gatwick (LGW)",
+    "lgw": "Gatwick (LGW)",
+    "stansted": "Stansted (STN)",
+    "stn": "Stansted (STN)",
+    "luton": "Luton (LTN)",
+    "ltn": "Luton (LTN)",
+    "city airport": "London City (LCY)",
+    "london city": "London City (LCY)",
+    "lcy": "London City (LCY)",
+    "manchester": "Manchester (MAN)",
+    "man": "Manchester (MAN)",
+    "birmingham": "Birmingham (BHX)",
+    "bhx": "Birmingham (BHX)",
+    "edinburgh": "Edinburgh (EDI)",
+    "edi": "Edinburgh (EDI)",
+    "glasgow": "Glasgow (GLA)",
+    "gla": "Glasgow (GLA)",
+    "dublin": "Dublin (DUB)",
+    "dub": "Dublin (DUB)",
+    "charles de gaulle": "Paris Charles de Gaulle (CDG)",
+    "cdg": "Paris Charles de Gaulle (CDG)",
+    "orly": "Paris Orly (ORY)",
+    "ory": "Paris Orly (ORY)",
+    "schiphol": "Amsterdam Schiphol (AMS)",
+    "ams": "Amsterdam Schiphol (AMS)",
+    "dubai": "Dubai (DXB)",
+    "dxb": "Dubai (DXB)",
+    "lahore": "Lahore (LHE)",
+    "lhe": "Lahore (LHE)",
+    "islamabad": "Islamabad (ISB)",
+    "isb": "Islamabad (ISB)",
+    "karachi": "Karachi (KHI)",
+    "khi": "Karachi (KHI)",
+    "jfk": "New York JFK (JFK)",
+    "new york jfk": "New York JFK (JFK)",
+    "lax": "Los Angeles (LAX)",
+    "los angeles": "Los Angeles (LAX)",
+}
+
+NAME_REJECT_PHRASES = (
+    "traveling with",
+    "travelling with",
+    "me and my",
+    "myself",
+    "with my",
+    "and my",
+    "my wife",
+    "my husband",
+    "my family",
+    "just me",
+    "only me",
+    "lead passenger",
+    "passenger name",
+)
+
+NAME_STOPWORDS = {
+    "traveling",
+    "travelling",
+    "with",
+    "my",
+    "me",
+    "myself",
+    "and",
+    "the",
+    "a",
+    "an",
+    "airport",
+    "vip",
+    "transfer",
+    "service",
+    "please",
+    "hello",
+    "hi",
+    "sp",
+    "ok",
+    "okay",
+    "yes",
+    "no",
+    "thanks",
+    "thank",
+    "you",
+    "name",
+    "is",
+    "i",
+    "am",
+    "im",
 }
 
 INTENT_NOISE = (
@@ -175,7 +227,110 @@ class BookingService:
             return False
         if "@" in cleaned or re.search(r"\d{5,}", cleaned):
             return False
+        lowered = cleaned.lower()
+        if any(phrase in lowered for phrase in NAME_REJECT_PHRASES):
+            return False
+        tokens = re.findall(r"[A-Za-z\u0600-\u06FF']+", cleaned)
+        if not tokens:
+            return False
+        if any(token.lower() in NAME_STOPWORDS for token in tokens):
+            return False
+        # Reject single very short garbage like "sp".
+        if len(tokens) == 1 and len(tokens[0]) <= 2:
+            return False
         return bool(re.search(r"[A-Za-z\u0600-\u06FF]", cleaned))
+
+    def _extract_airport(self, text: str) -> str | None:
+        lowered = text.lower()
+        for alias in sorted(AIRPORT_ALIASES.keys(), key=len, reverse=True):
+            pattern = rf"\b{re.escape(alias)}\b"
+            if re.search(pattern, lowered):
+                return AIRPORT_ALIASES[alias]
+
+        # Do not invent short/typo placeholders from loose "at X" matches.
+        match = re.search(
+            r"(?:at|from|through|via|arrive(?:s|ing)?\s+at|depart(?:s|ing)?\s+from)\s+"
+            r"([A-Za-z][A-Za-z]*(?:\s+[A-Za-z][A-Za-z]*){0,3}(?:\s+airport)?)",
+            text,
+            re.I,
+        )
+        if match:
+            candidate = match.group(1).strip(" .,")
+            candidate_key = candidate.lower().replace(" airport", "").strip()
+            if candidate_key in AIRPORT_ALIASES:
+                return AIRPORT_ALIASES[candidate_key]
+            if (
+                candidate
+                and len(candidate) >= 8
+                and "airport" in candidate.lower()
+                and candidate_key not in NAME_STOPWORDS
+                and not self._looks_like_intent_only(candidate.lower())
+            ):
+                return candidate.title()
+
+        stripped = text.strip()
+        if re.fullmatch(r"[A-Za-z][A-Za-z\s]{2,30}", stripped):
+            key = stripped.lower().replace(" airport", "").strip()
+            if key in AIRPORT_ALIASES:
+                return AIRPORT_ALIASES[key]
+            if "airport" in stripped.lower() and len(stripped) >= 8:
+                return stripped.title()
+
+        return None
+
+    @staticmethod
+    def _extract_name(text: str) -> str | None:
+        lowered = text.lower().strip()
+        if BookingService._looks_like_intent_only(lowered):
+            return None
+        if any(phrase in lowered for phrase in NAME_REJECT_PHRASES):
+            return None
+        if "@" in text or re.search(r"\+?\d[\d\s\-()]{7,}\d", text):
+            return None
+
+        match = re.search(
+            r"(?:my name is|i am|i'm|this is|lead passenger(?:\s+is)?)\s+"
+            r"([A-Za-z][A-Za-z'\-]*(?:\s+[A-Za-z][A-Za-z'\-]*){0,3})",
+            text,
+            re.I,
+        )
+        if match:
+            candidate = match.group(1).strip(" .,")
+            return candidate if BookingService._is_valid_name(candidate) else None
+
+        # Short name-only answers (e.g. "Ali Khan").
+        if re.fullmatch(r"[A-Za-z][A-Za-z'\-]+(?:\s+[A-Za-z][A-Za-z'\-]+){0,3}", text.strip()):
+            candidate = text.strip()
+            if BookingService._is_valid_name(candidate):
+                return candidate
+        return None
+
+    def strip_redundant_closings(self, answer: str) -> str:
+        if not answer:
+            return answer
+        cleaned = answer.strip()
+        closing = self.informational_closing()
+        # Keep at most one informational closing.
+        while cleaned.lower().count(closing.lower()) > 1:
+            index = cleaned.lower().rfind(closing.lower())
+            cleaned = (cleaned[:index] + cleaned[index + len(closing) :]).strip()
+        # If a structured summary block is present, drop the soft closing.
+        if re.search(r"(?m)^-\s+(Airport|Lead passenger|Email|Phone):", cleaned):
+            cleaned = re.sub(
+                rf"(?:\n+)?{re.escape(closing)}\s*$",
+                "",
+                cleaned,
+                flags=re.I,
+            ).strip()
+        return cleaned
+
+    def unified_handover_message(self, state: EnquiryState) -> str:
+        summary = self.summary_message(state)
+        return (
+            "Thank you. I have your details and can send this enquiry to our team "
+            "so they can confirm availability and pricing.\n\n"
+            f"{summary}"
+        )
 
     @staticmethod
     def _is_valid_email(email: str) -> bool:
@@ -379,6 +534,98 @@ class BookingService:
             "and email address (or phone number) so they can reach you?"
         )
 
+    def contact_reminder_message(self, state: EnquiryState) -> str:
+        has_name = bool(state.enquiry_type != EnquiryType.NONE and self._is_valid_name(self._field_value(state, "passenger_name")))
+        has_email = bool(
+            state.enquiry_type != EnquiryType.NONE
+            and self._field_value(state, "contact_email")
+            and self._is_valid_email(str(self._field_value(state, "contact_email")))
+        )
+        has_phone = bool(
+            state.enquiry_type != EnquiryType.NONE
+            and self._field_value(state, "contact_phone")
+            and self._is_valid_phone(str(self._field_value(state, "contact_phone")))
+        )
+        missing: list[str] = []
+        if not has_name:
+            missing.append("your full name")
+        if not has_email and not has_phone:
+            missing.append("an email address or phone number")
+        elif not has_email:
+            missing.append("an email address")
+        needed = " and ".join(missing) if missing else "your contact details"
+        return (
+            f"I still need {needed} before I can send this to the team. "
+            "Please reply with those details when you are ready."
+        )
+
+    def already_asked_for_contact(self, messages: list[dict[str, str]]) -> bool:
+        markers = (
+            "before i send this over to our team",
+            "share your full name",
+            "email address (or phone",
+            "i still need",
+        )
+        for item in reversed(messages[-6:]):
+            if item.get("role") != "assistant":
+                continue
+            text = (item.get("content") or "").lower()
+            if any(marker in text for marker in markers):
+                return True
+        return False
+
+    def is_contact_repeat_complaint(self, message: str) -> bool:
+        text = message.lower()
+        phrases = (
+            "again and again",
+            "again and agin",
+            "baar baar",
+            "why you ask",
+            "why are you asking",
+            "keep asking",
+            "asked me name",
+            "ask me name",
+            "already gave",
+            "already told",
+            "already shared",
+        )
+        return any(phrase in text for phrase in phrases)
+
+    def contact_repeat_apology(self, state: EnquiryState) -> str:
+        has_name = bool(state.enquiry_type != EnquiryType.NONE and self._is_valid_name(self._field_value(state, "passenger_name")))
+        has_contact = self.has_team_contact(state)
+        if has_contact:
+            return (
+                "Apologies for repeating that. I already have your contact details, "
+                "so I will not ask again."
+            )
+        if has_name:
+            return (
+                "Sorry about that — I will not keep asking for your name. "
+                "I only still need an email address or phone number so the team can reach you."
+            )
+        return (
+            "Sorry for repeating myself. I only need your full name and an email or phone number "
+            "once, so the team can reach you when you want this enquiry sent over. "
+            "Whenever you are ready, please share those details."
+        )
+
+    def sanitize_false_handover(self, answer: str) -> str:
+        if not answer:
+            return answer
+        cleaned = answer
+        patterns = (
+            r"(?i)I have successfully passed[^.!\n]*[.!]?",
+            r"(?i)I(?:'ve| have) (?:passed|submitted|sent|handed)[^.!\n]*(?:team|enquiry)[^.!\n]*[.!]?",
+            r"(?i)(?:They|Our team) will (?:be in touch|get in touch|contact you|review)[^.!\n]*[.!]?",
+            r"(?i)passed your enquiry[^.!\n]*[.!]?",
+            r"(?i)submitted your enquiry[^.!\n]*[.!]?",
+        )
+        for pattern in patterns:
+            cleaned = re.sub(pattern, "", cleaned)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+        return cleaned
+
     def build_enquiry_context(self, state: EnquiryState) -> str:
         if state.enquiry_type == EnquiryType.NONE:
             return ""
@@ -401,8 +648,8 @@ class BookingService:
             else (
                 "Contact details are MISSING or incomplete. You must NOT say the enquiry has been "
                 "passed, submitted, or sent to the team, and you must NOT say they will be in touch. "
-                "Ask: Before I send this over to our team, could you please share your full name "
-                "and email address (or phone number) so they can reach you?"
+                "Ask for full name and email/phone only when the user wants to send the enquiry to the team. "
+                "Do not repeat the same contact request on every message."
             )
         )
         return (
@@ -590,30 +837,6 @@ class BookingService:
 
         return None
 
-    def _extract_airport(self, text: str) -> str | None:
-        lowered = text.lower()
-        # Prefer longer aliases first (e.g. london city before city).
-        for alias in sorted(AIRPORT_ALIASES.keys(), key=len, reverse=True):
-            pattern = rf"\b{re.escape(alias)}\b"
-            if re.search(pattern, lowered):
-                return AIRPORT_ALIASES[alias]
-
-        match = re.search(
-            r"(?:at|from|through|via|arrive(?:s|ing)?\s+at|depart(?:s|ing)?\s+from)\s+"
-            r"([A-Za-z][A-Za-z\s]{1,40}?(?:airport|terminal\s*\d+)?)",
-            text,
-            re.I,
-        )
-        if match:
-            candidate = match.group(1).strip(" .,")
-            if candidate and not self._looks_like_intent_only(candidate.lower()):
-                return candidate
-
-        if re.fullmatch(r"[A-Za-z][A-Za-z\s]{1,30}", text.strip()) and "airport" in lowered:
-            return text.strip()
-
-        return None
-
     @staticmethod
     def _extract_date(text: str) -> str | None:
         patterns = (
@@ -653,26 +876,6 @@ class BookingService:
         match = re.search(r"\b(\d{1,2})\s*(?:o'?clock)\b", text, re.I)
         if match:
             return match.group(0).strip()
-        return None
-
-    @staticmethod
-    def _extract_name(text: str) -> str | None:
-        lowered = text.lower().strip()
-        if BookingService._looks_like_intent_only(lowered):
-            return None
-        if "@" in text or re.search(r"\+?\d[\d\s\-()]{7,}\d", text):
-            return None
-        match = re.search(
-            r"(?:my name is|i am|i'm|this is|lead passenger(?:\s+is)?)\s+([A-Za-z][A-Za-z\s'\-]{1,40})",
-            text,
-            re.I,
-        )
-        if match:
-            return match.group(1).strip(" .,")
-        # Short name-only answers.
-        if re.fullmatch(r"[A-Za-z][A-Za-z'\-]+(?:\s+[A-Za-z][A-Za-z'\-]+){0,3}", text.strip()):
-            if not any(token in lowered for token in ("airport", "transfer", "vip", "passengers")):
-                return text.strip()
         return None
 
     @staticmethod

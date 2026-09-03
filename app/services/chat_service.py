@@ -111,28 +111,42 @@ class ChatService:
             enquiry_context=enquiry_context,
         )
 
-        if not self.booking_service.has_team_contact(enquiry_state) and (
-            self.booking_service.wants_team_handover(message)
-            or self.booking_service.claims_team_handover(answer)
-        ):
-            answer = self.booking_service.contact_needed_message(enquiry_state)
+        if not self.booking_service.has_team_contact(enquiry_state):
+            if self.booking_service.wants_team_handover(message):
+                # Only force the contact CTA when the user explicitly asks to send/pass enquiry.
+                if self.booking_service.already_asked_for_contact(record.messages):
+                    answer = self.booking_service.contact_reminder_message(enquiry_state)
+                else:
+                    answer = self.booking_service.contact_needed_message(enquiry_state)
+            elif self.booking_service.claims_team_handover(answer):
+                # Model invented a handover — strip that claim; do not spam the CTA.
+                answer = self.booking_service.sanitize_false_handover(answer)
+                if not answer.strip():
+                    answer = (
+                        "I can help with your enquiry. "
+                        "When you are ready to send it to the team, I will need your full name "
+                        "and an email or phone number."
+                    )
+
+        if self.booking_service.is_contact_repeat_complaint(message):
+            answer = self.booking_service.contact_repeat_apology(enquiry_state)
 
         if is_urgent:
             urgent = self.booking_service.urgent_contact_message()
             if "+44 7414 246103" not in answer:
                 answer = f"{urgent}\n\n{answer}"
 
-        if self.booking_service.is_informational_question(message):
+        if self.booking_service.is_informational_question(message) and enquiry_state.status != EnquiryStatus.COMPLETE:
             answer = self.booking_service.strip_enquiry_upsell(answer)
             closing = self.booking_service.informational_closing()
             if "add this to your" not in answer.lower() and closing.lower() not in answer.lower():
                 answer = f"{answer.rstrip()}\n\n{closing}"
 
         if enquiry_state.status == EnquiryStatus.COMPLETE:
-            summary = self.booking_service.summary_message(enquiry_state)
-            if summary and summary not in answer:
-                answer = f"{answer}\n\n{summary}"
+            # One clean handover: structured summary only (no stacked closings).
+            answer = self.booking_service.unified_handover_message(enquiry_state)
 
+        answer = self.booking_service.strip_redundant_closings(answer)
         answer = strip_code_from_reply(answer)
 
         self.conversation_store.append_message(conversation_id, "user", message)
