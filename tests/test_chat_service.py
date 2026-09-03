@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.models.chat import ChatResponse
-from app.services.chat_service import ChatService
+from app.services.chat_service import ChatService, strip_code_from_reply
 
 
 @pytest.fixture
@@ -30,3 +30,73 @@ def test_knowledge_question_uses_retrieval(chat_service: ChatService) -> None:
     ), patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=True):
         response = chat_service.chat("What services does UpgradeVIP offer?")
         assert response.answer
+
+
+def test_strip_code_from_reply_removes_dict_dump() -> None:
+    raw = (
+        "Thank you. Our team will be in touch.\n\n"
+        "I've got the details for your Airport VIP enquiry. "
+        "Summary: {'airport': 'Lahore', 'passenger_count': 4, 'extra': {}}"
+    )
+    cleaned = strip_code_from_reply(raw)
+    assert "Summary:" not in cleaned
+    assert "{'airport'" not in cleaned
+    assert "Our team will be in touch." in cleaned
+
+
+def test_handover_without_contact_asks_for_details(chat_service: ChatService) -> None:
+    chat_service._gemini_client.generate.return_value = (
+        "I have successfully passed your enquiry over to our team! "
+        "They will be in touch with you shortly."
+    )
+    with patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=False):
+        first = chat_service.chat("I need airport VIP service at Heathrow")
+        response = chat_service.chat(
+            "Please pass this complete enquiry over to your team",
+            conversation_id=first.conversation_id,
+        )
+    lowered = response.answer.lower()
+    assert "successfully passed" not in lowered
+    assert "will be in touch" not in lowered
+    assert "before i send this over to our team" in lowered
+    assert "full name" in lowered
+    assert "email" in lowered
+
+
+def test_retains_heathrow_from_first_message(chat_service: ChatService) -> None:
+    chat_service._gemini_client.generate.return_value = "Thanks — what date will you travel?"
+    with patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=False):
+        response = chat_service.chat(
+            "I need airport VIP at Heathrow Airport (LHR) next Monday at 3 PM for 2 passengers"
+        )
+    store = chat_service.conversation_store
+    state = store.get_enquiry_state(response.conversation_id)
+    assert state.airport_vip.airport == "Heathrow"
+    assert state.airport_vip.passenger_count == 2
+    assert service_next_is_not_airport(chat_service, state)
+
+
+def test_informational_answer_gets_helpful_closing(chat_service: ChatService) -> None:
+    chat_service._gemini_client.generate.return_value = (
+        "On arrival, your greeter meets you airside.\n\n"
+        "Would you like me to add this to your current enquiry?"
+    )
+    with patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=False):
+        response = chat_service.chat("Walk me through the arrival steps")
+    lowered = response.answer.lower()
+    assert "add this to your current enquiry" not in lowered
+    assert "does this help" in lowered
+
+
+def test_urgent_travel_mentions_whatsapp(chat_service: ChatService) -> None:
+    chat_service._gemini_client.generate.return_value = "We can look into VIP support for you."
+    with patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=False):
+        response = chat_service.chat("My flight lands in 4 hours — need VIP meet and greet")
+    assert "+44 7414 246103" in response.answer
+    assert "last-minute" in response.answer.lower() or "real-time" in response.answer.lower()
+
+
+def service_next_is_not_airport(chat_service: ChatService, state) -> bool:
+    missing = chat_service.booking_service.next_missing_field(state)
+    return missing is not None and missing[0] != "airport"
+

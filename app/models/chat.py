@@ -10,7 +10,7 @@ class Source(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1)
+    message: str = Field(default="", min_length=0)
     conversation_id: str | None = None
 
 

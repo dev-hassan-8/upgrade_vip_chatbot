@@ -37,6 +37,35 @@ function setError(message) {
   scrollChatToBottom();
 }
 
+function formatApiDetail(detail) {
+  if (!detail) return "Unable to send message.";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => (typeof item === "string" ? item : item.msg || JSON.stringify(item)))
+      .join(" ");
+  }
+  return String(detail);
+}
+
+async function readJsonResponse(response) {
+  const raw = await response.text();
+  if (!raw || !raw.trim()) {
+    throw new Error(
+      response.ok
+        ? "The server returned an empty reply. Please try again in a moment."
+        : `Request failed (${response.status}). Please try again.`
+    );
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (_error) {
+    throw new Error(
+      "Got an unexpected reply from the server. Please refresh and try again."
+    );
+  }
+}
+
 async function sendMessage(message) {
   if (isSending) return;
 
@@ -65,9 +94,12 @@ async function sendMessage(message) {
       }),
     });
 
-    const data = await response.json();
+    const data = await readJsonResponse(response);
     if (!response.ok) {
-      throw new Error(data.detail || "Unable to send message.");
+      throw new Error(formatApiDetail(data.detail) || "Unable to send message.");
+    }
+    if (!data.answer) {
+      throw new Error("No reply was returned. Please try again.");
     }
 
     conversationId = data.conversation_id;
@@ -76,7 +108,12 @@ async function sendMessage(message) {
     console.debug("Reply time (ms):", Date.now() - startedAt);
   } catch (error) {
     loadingMessage.remove();
-    setError(error.message || "Something went wrong. Please try again.");
+    const messageText = error && error.message ? error.message : "";
+    if (/failed to fetch|networkerror|load failed/i.test(messageText)) {
+      setError("Connection interrupted. Please check your link and try again.");
+    } else {
+      setError(messageText || "Something went wrong. Please try again.");
+    }
   } finally {
     clearTimeout(slowTimer);
     isSending = false;
