@@ -118,7 +118,9 @@ def test_complete_enquiry_uses_unified_handover(chat_service: ChatService) -> No
         for message in (
             "12 June 2026",
             "10:00 am",
+            "BA123",
             "2",
+            "2 bags",
             "Ali Khan",
             "ali@example.com",
             "+447414246103",
@@ -193,7 +195,11 @@ def test_empty_relevant_retrieval_uses_unavailable_fallback(chat_service: ChatSe
         return_value=("", []),
     ):
         response = chat_service.chat("Do you provide underwater submarine escorts?")
-    assert "don't have specific information about that in my current details" in response.answer.lower()
+    lowered = response.answer.lower()
+    assert "operations desk" in lowered or "whatsapp" in lowered
+    assert "+44 7414 246103" in response.answer
+    assert "avip@upgradevip.com" in lowered
+    assert "i don't have specific information about that in my current details" not in lowered
     chat_service._gemini_client.generate.assert_not_called()
 
 

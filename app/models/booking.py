@@ -21,6 +21,7 @@ class AirportVipEnquiry(BaseModel):
     service_time: str | None = None
     flight_number: str | None = None
     passenger_count: int | None = None
+    luggage_details: str | None = None
     passenger_name: str | None = None
     contact_email: str | None = None
     contact_phone: str | None = None
@@ -34,6 +35,7 @@ class AirportTransferEnquiry(BaseModel):
     dropoff_location: str | None = None
     service_date: str | None = None
     service_time: str | None = None
+    flight_number: str | None = None
     passenger_count: int | None = None
     luggage_details: str | None = None
     passenger_name: str | None = None

@@ -39,7 +39,7 @@ def test_extracts_airport_from_intent_message() -> None:
     assert state.airport_vip.service_time is not None
     missing = service.next_missing_field(state)
     assert missing is not None
-    assert missing[0] == "passenger_name"
+    assert missing[0] == "flight_number"
 
 
 def test_does_not_reask_airport_when_already_known() -> None:

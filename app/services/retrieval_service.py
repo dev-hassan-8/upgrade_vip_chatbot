@@ -164,7 +164,11 @@ INTENT_SECTION_PREFERENCE: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = 
 
 TRIGGER_LINE = re.compile(r"(?im)^this section answers:.*$")
 NO_RELEVANT_CONTEXT = "No relevant knowledge base context retrieved."
-UNAVAILABLE_ANSWER = "I don't have specific information about that in my current details."
+UNAVAILABLE_ANSWER = (
+    "I don’t have that exact detail in the information available here. "
+    "Our operations desk can confirm it quickly via WhatsApp on +44 7414 246103 "
+    "or email at avip@upgradevip.com."
+)
 
 
 class RetrievalService:

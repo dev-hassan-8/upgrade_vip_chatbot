@@ -70,4 +70,7 @@ def test_fast_track_retrieves_vip_services() -> None:
 
 
 def test_unavailable_constant() -> None:
-    assert "don't have specific information" in UNAVAILABLE_ANSWER.lower()
+    lowered = UNAVAILABLE_ANSWER.lower()
+    assert "7414 246103" in UNAVAILABLE_ANSWER
+    assert "avip@upgradevip.com" in lowered
+    assert "i don't have specific information about that in my current details" not in lowered

@@ -147,7 +147,9 @@ class BookingService:
         ("airport", "Which airport will you be travelling through?"),
         ("service_date", "What date will you be travelling?"),
         ("service_time", "What time will you need the service?"),
+        ("flight_number", "What is the flight number?"),
         ("passenger_count", "How many passengers will there be?"),
+        ("luggage_details", "How many bags or pieces of luggage will you have?"),
         ("passenger_name", "May I have the lead passenger name?"),
         ("contact_email", "What's the best email to reach you on?"),
         ("contact_phone", "And a contact phone number?"),
@@ -159,7 +161,9 @@ class BookingService:
         ("dropoff_location", "Where would you like to be dropped off?"),
         ("service_date", "What date will you be travelling?"),
         ("service_time", "What time will you need the transfer?"),
+        ("flight_number", "What is the flight number, if you have it?"),
         ("passenger_count", "How many passengers will there be?"),
+        ("luggage_details", "How many bags or pieces of luggage will you have?"),
         ("passenger_name", "May I have the lead passenger name?"),
         ("contact_email", "What's the best email to reach you on?"),
         ("contact_phone", "And a contact phone number?"),
@@ -810,11 +814,40 @@ class BookingService:
         if field_name == "passenger_name":
             return self._extract_name(text)
 
+        if field_name == "flight_number":
+            match = re.search(
+                r"(?:flight\s*(?:number|no\.?|#)?\s*[:=]?\s*)([A-Z]{1,3}\s?\d{2,4})\b",
+                text,
+                re.I,
+            )
+            if match:
+                return re.sub(r"\s+", "", match.group(1)).upper()
+            match = re.search(r"\b([A-Z]{2,3}\s?\d{2,4})\b", text, re.I)
+            if match and ("flight" in lowered or re.fullmatch(r"[A-Za-z]{2,3}\s?\d{2,4}", text.strip())):
+                return re.sub(r"\s+", "", match.group(1)).upper()
+            if re.fullmatch(r"[A-Za-z]{1,3}\s?\d{2,4}", text.strip()):
+                return re.sub(r"\s+", "", text.strip()).upper()
+
+        if field_name == "luggage_details":
+            match = re.search(
+                r"\b(\d{1,2})\s*(?:bags?|suitcases?|pieces?(?:\s+of\s+luggage)?|luggage)\b",
+                lowered,
+            )
+            if match:
+                return f"{match.group(1)} bags"
+            if "no bags" in lowered or "no luggage" in lowered:
+                return "0 bags"
+            if re.fullmatch(r"\d{1,2}", text.strip()):
+                return f"{text.strip()} bags"
+            if len(text.split()) <= 6 and any(
+                token in lowered for token in ("bag", "luggage", "suitcase", "piece")
+            ):
+                return text.strip()
+            return None
+
         if field_name in {
             "pickup_location",
             "dropoff_location",
-            "flight_number",
-            "luggage_details",
             "special_requirements",
         }:
             if self._looks_like_intent_only(lowered):
