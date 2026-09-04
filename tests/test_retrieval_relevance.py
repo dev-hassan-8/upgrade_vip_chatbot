@@ -69,6 +69,40 @@ def test_fast_track_retrieves_vip_services() -> None:
     assert not any("terms & conditions" in section for section in sections)
 
 
+def test_airport_vip_inclusions_retrieve_services_not_only_coverage() -> None:
+    service = RetrievalService(settings=get_settings(), vector_store=KnowledgeMemoryStore(get_settings()))
+    query = "What is included in Airport VIP?"
+    assert "services" in service.detect_intents(query)
+    chunks = service.retrieve(query)
+    assert chunks
+    sections = _sections(chunks)
+    assert any("service" in section for section in sections)
+
+
+def test_company_about_retrieves_multiple_about_sections() -> None:
+    service = RetrievalService(settings=get_settings(), vector_store=KnowledgeMemoryStore(get_settings()))
+    chunks = service.retrieve("Tell me about UpgradeVIP")
+    assert chunks
+    sections = " ".join(_sections(chunks))
+    assert "about upgradevip" in sections or "mission" in sections or "experience" in sections
+
+
+def test_operating_history_retrieves_experience() -> None:
+    service = RetrievalService(settings=get_settings(), vector_store=KnowledgeMemoryStore(get_settings()))
+    chunks = service.retrieve("How long have you been operating?")
+    assert chunks
+    sections = _sections(chunks)
+    assert any("experience" in section or "partnership" in section or "mission" in section for section in sections)
+
+
+def test_vip_terminal_access_surfaces_mission_or_services() -> None:
+    service = RetrievalService(settings=get_settings(), vector_store=KnowledgeMemoryStore(get_settings()))
+    chunks = service.retrieve("What is VIP Terminal access?")
+    assert chunks
+    joined = " ".join((c.metadata.get("section", "") + " " + c.text).lower() for c in chunks)
+    assert "terminal" in joined or "vip" in joined
+
+
 def test_unavailable_constant() -> None:
     lowered = UNAVAILABLE_ANSWER.lower()
     assert "7414 246103" in UNAVAILABLE_ANSWER

@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     knowledge_base_dir: str = "./knowledge_base"
     chunk_size: int = 800
     chunk_overlap: int = 100
-    top_k: int = 5
-    similarity_threshold: float = 0.45
+    top_k: int = 6
+    similarity_threshold: float = 0.40
 
     max_history_messages: int = 12
     log_level: str = "INFO"
