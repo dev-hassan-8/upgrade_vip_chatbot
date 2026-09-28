@@ -3,7 +3,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.models.chat import ChatResponse
-from app.services.chat_service import ChatService, strip_code_from_reply
+from app.prompts.system_prompt import SYSTEM_PROMPT
+from app.services.chat_service import (
+    ChatService,
+    strip_code_from_reply,
+    strip_source_attribution,
+)
 
 
 @pytest.fixture
@@ -30,6 +35,25 @@ def test_knowledge_question_uses_retrieval(chat_service: ChatService) -> None:
     ), patch.object(chat_service.retrieval_service, "needs_retrieval", return_value=True):
         response = chat_service.chat("What services does UpgradeVIP offer?")
         assert response.answer
+
+
+def test_system_prompt_requires_company_representative_voice() -> None:
+    lowered = SYSTEM_PROMPT.lower()
+    assert "company representative" in lowered
+    assert "written on the website" in lowered or "according to our website" in lowered
+
+
+def test_strip_source_attribution_removes_website_cites() -> None:
+    raw = (
+        "According to our website, we offer Airport VIP Services and Airport Transfers. "
+        "The website says lounge access is available."
+    )
+    cleaned = strip_source_attribution(raw)
+    lowered = cleaned.lower()
+    assert "according to our website" not in lowered
+    assert "the website says" not in lowered
+    assert "airport vip services" in lowered
+    assert "lounge access" in lowered
 
 
 def test_strip_code_from_reply_removes_dict_dump() -> None:
