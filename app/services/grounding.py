@@ -260,7 +260,6 @@ class GroundingService:
         lines: list[str] = [
             "GROUNDING DIRECTIVES (must follow):",
             "- Use ONLY facts present in KNOWLEDGE BASE CONTEXT. Do not invent or assume missing details.",
-            "- Speak as UpgradeVIP’s representative. Never tell the customer a fact is ‘from the website’ or ‘from the knowledge base’.",
             "- If something is not in the context, say the specific information is not available.",
             f"- Official contact when needed: {CONTACT_LINE}.",
             "- Answer every part of the user's question.",

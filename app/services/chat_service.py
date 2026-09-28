@@ -38,29 +38,6 @@ def strip_code_from_reply(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
 
 
-_SOURCE_ATTRIBUTION_PATTERNS = (
-    r"(?i)\baccording to (?:our |the )?(?:website|web ?site|knowledge base|documentation|documents?|faq)\b[,:]?\s*",
-    r"(?i)\bas (?:stated|written|noted|mentioned) on (?:our |the )?(?:website|web ?site|upgradevip\.com)\b[,:]?\s*",
-    r"(?i)\b(?:our |the )?website (?:says|states|mentions|notes|confirms)\b[,:]?\s*",
-    r"(?i)\b(?:based on|from) (?:our |the )?(?:website|knowledge base|documentation|documents?)\b[,:]?\s*",
-    r"(?i)\bon (?:our |the )?website(?:\s+it)?\s+(?:says|states|is written)\b[,:]?\s*",
-    r"(?i)\bthe knowledge base (?:says|states|confirms|notes)\b[,:]?\s*",
-    r"(?i)\bas per (?:our |the )?(?:website|knowledge base|documentation)\b[,:]?\s*",
-)
-
-
-def strip_source_attribution(text: str) -> str:
-    """Remove website/document attribution so replies sound like a company representative."""
-    if not text:
-        return text
-    cleaned = text
-    for pattern in _SOURCE_ATTRIBUTION_PATTERNS:
-        cleaned = re.sub(pattern, "", cleaned)
-    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
-    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
-    return cleaned.strip()
-
-
 class ChatService:
     def __init__(
         self,
@@ -213,7 +190,6 @@ class ChatService:
 
         answer = self.booking_service.strip_redundant_closings(answer)
         answer = strip_code_from_reply(answer)
-        answer = strip_source_attribution(answer)
 
         self.conversation_store.append_message(conversation_id, "user", message)
         self.conversation_store.append_message(conversation_id, "assistant", answer)
